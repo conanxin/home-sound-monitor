@@ -13,19 +13,24 @@
       body {
         margin: 0;
         min-height: 100vh;
-        display: grid;
-        place-items: center;
         background: #f6f7f9;
         color: #172033;
       }
 
       main {
-        width: min(560px, calc(100vw - 32px));
+        width: min(720px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 40px 0;
       }
 
       h1 {
         margin: 0 0 12px;
         font-size: 28px;
+      }
+
+      h2 {
+        margin: 28px 0 12px;
+        font-size: 18px;
       }
 
       p {
@@ -49,9 +54,65 @@
         font-weight: 700;
       }
 
-      #status {
+      .status-line {
         min-height: 28px;
         font-size: 15px;
+      }
+
+      .camera-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .camera {
+        border: 1px solid #d9dee8;
+        border-radius: 8px;
+        padding: 14px;
+        background: #fff;
+      }
+
+      .camera-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .camera-name {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        font-weight: 700;
+      }
+
+      .badge {
+        flex: 0 0 auto;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .online {
+        background: #dff8e7;
+        color: #146b35;
+      }
+
+      .offline {
+        background: #ffe4e1;
+        color: #9d2520;
+      }
+
+      .camera-meta {
+        margin-top: 10px;
+        display: grid;
+        gap: 4px;
+        color: #596477;
+        font-size: 14px;
+        overflow-wrap: anywhere;
+      }
+
+      .error {
+        color: #9d2520;
       }
 
       @media (prefers-color-scheme: dark) {
@@ -68,6 +129,29 @@
           background: #4da3ff;
           color: #07111f;
         }
+
+        .camera {
+          border-color: #303848;
+          background: #171c26;
+        }
+
+        .camera-meta {
+          color: #c8d0dc;
+        }
+
+        .online {
+          background: #123f26;
+          color: #9af0b5;
+        }
+
+        .offline {
+          background: #4a1d1b;
+          color: #ffb7b1;
+        }
+
+        .error {
+          color: #ffb7b1;
+        }
       }
     </style>
   </head>
@@ -75,27 +159,97 @@
     <main>
       <h1>家声 HomeSound</h1>
       <p>打开家里的摄像头麦克风，把多个房间的声音合成一路，在手机浏览器里持续监听。</p>
+
       <audio id="player" controls preload="none"></audio>
       <button id="start">开始监听</button>
-      <p id="status">等待开始</p>
+      <p id="play-status" class="status-line">等待开始</p>
+
+      <h2>摄像头状态</h2>
+      <p id="service-status" class="status-line">正在读取状态</p>
+      <div id="camera-list" class="camera-list"></div>
     </main>
 
     <script>
       const player = document.getElementById("player");
       const start = document.getElementById("start");
-      const status = document.getElementById("status");
+      const playStatus = document.getElementById("play-status");
+      const serviceStatus = document.getElementById("service-status");
+      const cameraList = document.getElementById("camera-list");
+
+      function formatRelativeTime(value) {
+        if (!value) return "尚未收到音频";
+        const then = new Date(value).getTime();
+        if (Number.isNaN(then)) return value;
+        const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+        if (seconds < 5) return "刚刚";
+        if (seconds < 60) return `${seconds} 秒前`;
+        const minutes = Math.round(seconds / 60);
+        if (minutes < 60) return `${minutes} 分钟前`;
+        const hours = Math.round(minutes / 60);
+        return `${hours} 小时前`;
+      }
+
+      function renderCameras(cameras) {
+        if (!cameras.length) {
+          cameraList.innerHTML = `<div class="camera">还没有配置摄像头</div>`;
+          return;
+        }
+
+        cameraList.innerHTML = cameras
+          .map((camera) => {
+            const badge = camera.online
+              ? `<span class="badge online">在线</span>`
+              : `<span class="badge offline">离线</span>`;
+            const lastAudio = formatRelativeTime(camera.last_audio_at);
+            const error = camera.last_error
+              ? `<div class="error">错误：${camera.last_error}</div>`
+              : "";
+
+            return `
+              <section class="camera">
+                <div class="camera-head">
+                  <div class="camera-name">${camera.name}</div>
+                  ${badge}
+                </div>
+                <div class="camera-meta">
+                  <div>最近音频：${lastAudio}</div>
+                  <div>重连次数：${camera.restarts}</div>
+                  <div>音量：${camera.volume}</div>
+                  ${error}
+                </div>
+              </section>
+            `;
+          })
+          .join("");
+      }
+
+      async function refreshStatus() {
+        try {
+          const response = await fetch(`/status?ts=${Date.now()}`, { cache: "no-store" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const payload = await response.json();
+          serviceStatus.textContent = `服务正常，采样率 ${payload.sample_rate}Hz`;
+          renderCameras(payload.cameras || []);
+        } catch (error) {
+          serviceStatus.textContent = "无法读取状态，请检查服务是否仍在运行";
+          cameraList.innerHTML = "";
+        }
+      }
 
       start.addEventListener("click", async () => {
         player.src = `/stream.mp3?ts=${Date.now()}`;
         await player.play();
         start.hidden = true;
-        status.textContent = "正在监听";
+        playStatus.textContent = "正在监听";
       });
 
       player.addEventListener("error", () => {
-        status.textContent = "播放失败，请检查服务端和摄像头连接";
+        playStatus.textContent = "播放失败，请检查服务端和摄像头连接";
         start.hidden = false;
       });
+
+      refreshStatus();
+      setInterval(refreshStatus, 5000);
     </script>
   </body>
 </html>

@@ -1,17 +1,42 @@
+# HomeSound 示例配置
+#
+# 使用方法：
+# 1. 复制本文件为 config.yaml
+# 2. 把 cameras 里的 url 改成你的摄像头 RTSP 地址
+# 3. 运行：python src/homesound.py --config config.yaml
+#
+# 注意：真实 config.yaml 可能包含摄像头账号密码，不要提交到 GitHub。
+
 server:
+  # 0.0.0.0 表示允许局域网内其他设备访问。
+  # 如果只想在本机调试，可以改成 127.0.0.1。
   host: 0.0.0.0
+
+  # 浏览器访问端口。手机访问时使用：http://服务器局域网IP:8080
   port: 8080
 
 audio:
+  # 内部统一采样率，推荐保持 48000。
   sample_rate: 48000
+
+  # 当前原型只支持单声道，请保持 1。
   channels: 1
+
+  # 每个摄像头保留最近多少秒声音块。不是录音保存，只是实时缓冲。
   buffer_seconds: 8
+
+  # 当前原型输出 MP3，兼容大多数浏览器。
   output_format: mp3
 
 cameras:
   - name: 儿童房 A
+    # 请替换为你的摄像头 RTSP 地址。
+    # 先用 ffmpeg -rtsp_transport tcp -i "你的地址" 确认能读到 Audio。
     url: rtsp://user:password@192.168.1.31:554/stream1
+
+    # 混音音量倍率。多个房间同时监听时可以适当调低，例如 0.7。
     volume: 1.0
+
   - name: 儿童房 B
     url: rtsp://user:password@192.168.1.32:554/stream1
-    volume: 1.0
+    volume: 0.8

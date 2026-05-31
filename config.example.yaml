@@ -1,0 +1,17 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+
+audio:
+  sample_rate: 48000
+  channels: 1
+  buffer_seconds: 8
+  output_format: mp3
+
+cameras:
+  - name: 儿童房 A
+    url: rtsp://user:password@192.168.1.31:554/stream1
+    volume: 1.0
+  - name: 儿童房 B
+    url: rtsp://user:password@192.168.1.32:554/stream1
+    volume: 1.0

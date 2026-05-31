@@ -6,7 +6,13 @@ HomeSound 当前是一个 Python 原型，代码入口是：
 src/homesound.py
 ```
 
-它尽量只依赖 Python 标准库，把音频解码、探测和编码交给系统里的 `ffmpeg` / `ffprobe` 命令。
+前端页面在：
+
+```text
+src/web/index.html
+```
+
+项目尽量只依赖 Python 标准库，把音频解码、探测和编码交给系统里的 `ffmpeg` / `ffprobe` 命令。
 
 ## 命令入口
 
@@ -48,14 +54,15 @@ python src/homesound.py probe "rtsp://user:password@192.168.1.31:554/stream1" --
 6. PCM 数据写入该摄像头的 `PcmRingBuffer`。
 7. 摄像头状态会记录在线状态、最近收到音频时间、重连次数和读取字节数。
 8. HTTP 服务启动，提供网页、音频流、健康检查和状态接口。
-9. 浏览器访问 `/stream.mp3` 时，`Mixer` 读取各摄像头最新声音并混音。
-10. 服务端再调用 ffmpeg 把混音后的 PCM 编码成 MP3 输出给浏览器。
+9. 首页每 5 秒读取 `/status`，显示摄像头在线/离线、最近音频时间、重连次数和错误信息。
+10. 浏览器访问 `/stream.mp3` 时，`Mixer` 读取各摄像头最新声音并混音。
+11. 服务端再调用 ffmpeg 把混音后的 PCM 编码成 MP3 输出给浏览器。
 
 ## HTTP 接口
 
 ### `/`
 
-网页播放器。
+网页播放器和摄像头状态面板。页面会自动轮询 `/status`。
 
 ### `/stream.mp3`
 
@@ -102,38 +109,15 @@ ok
 
 把 RTSP 地址中的密码隐藏掉，用于日志和 `/status`。
 
-```text
-rtsp://user:password@192.168.1.31:554/stream1
-```
-
-会变成：
-
-```text
-rtsp://user:***@192.168.1.31:554/stream1
-```
-
 ### `validate_config()`
 
-做基础配置校验。它会检查：
-
-- 是否至少配置一个摄像头。
-- 每个摄像头是否有 URL。
-- `volume` 是否是数字。
-- 端口是否在合法范围内。
-- 当前是否保持 `audio.channels: 1`。
+做基础配置校验。它会检查摄像头、URL、音量、端口、采样率和声道配置。
 
 ### `CameraState`
 
-记录摄像头运行状态：
+记录摄像头运行状态：`online`、`last_audio_at`、`last_error`、`restarts`、`bytes_read`、`started_at`。
 
-- `online`
-- `last_audio_at`
-- `last_error`
-- `restarts`
-- `bytes_read`
-- `started_at`
-
-这些状态会被 `/status` 使用。
+这些状态会被 `/status` 和首页状态面板使用。
 
 ### `CameraWorker`
 
@@ -163,6 +147,23 @@ ffmpeg \
 ### `probe_camera()`
 
 调用 `ffprobe` 检测 RTSP 地址是否能访问，以及里面是否有音频轨道。这是用户排障的第一入口。
+
+## 前端状态面板
+
+`src/web/index.html` 做了三件事：
+
+- 点击“开始监听”后播放 `/stream.mp3`。
+- 页面加载后立即读取 `/status`。
+- 每 5 秒刷新一次摄像头状态。
+
+状态面板会显示：
+
+- 摄像头名称。
+- 在线 / 离线。
+- 最近收到音频的相对时间。
+- 重连次数。
+- 音量。
+- 最近错误。
 
 ## 调试方法
 
@@ -196,9 +197,8 @@ http://127.0.0.1:8080/stream.mp3
 
 下一步适合继续做：
 
-1. 首页展示 `/status` 中的摄像头状态。
-2. 增加 Dockerfile 和 docker-compose 示例。
-3. 增加 limiter，避免混音爆音。
-4. 增加 WebM/Opus 输出，降低浏览器播放延迟。
-5. 增加访问令牌，避免局域网里任何人都能打开。
-6. 拆分模块并加入测试。
+1. 增加 Dockerfile 和 docker-compose 示例。
+2. 增加 limiter，避免混音爆音。
+3. 增加 WebM/Opus 输出，降低浏览器播放延迟。
+4. 增加访问令牌，避免局域网里任何人都能打开。
+5. 拆分模块并加入测试。
